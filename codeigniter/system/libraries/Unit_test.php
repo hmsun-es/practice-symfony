@@ -1,0 +1,392 @@
+<?php
+
+/**
+ * CodeIgniter.
+ *
+ * An open source application development framework for PHP
+ *
+ * This content is released under the MIT License (MIT)
+ *
+ * Copyright (c) 2019 - 2022, CodeIgniter Foundation
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *
+ * @author	EllisLab Dev Team
+ * @copyright	Copyright (c) 2008 - 2014, EllisLab, Inc. (https://ellislab.com/)
+ * @copyright	Copyright (c) 2014 - 2019, British Columbia Institute of Technology (https://bcit.ca/)
+ * @copyright	Copyright (c) 2019 - 2022, CodeIgniter Foundation (https://codeigniter.com/)
+ * @license	https://opensource.org/licenses/MIT	MIT License
+ *
+ * @see	https://codeigniter.com
+ * @since	Version 1.3.1
+ *
+ * @filesource
+ */
+defined('BASEPATH') || exit('No direct script access allowed');
+
+/**
+ * Unit Testing Class.
+ *
+ * Simple testing class
+ *
+ * @category	UnitTesting
+ *
+ * @author		EllisLab Dev Team
+ *
+ * @see		https://codeigniter.com/userguide3/libraries/unit_testing.html
+ */
+class CI_Unit_test
+{
+    /**
+     * Active flag.
+     *
+     * @var bool
+     */
+    public $active = true;
+
+    /**
+     * Test results.
+     *
+     * @var array
+     */
+    public $results = [];
+
+    /**
+     * Strict comparison flag.
+     *
+     * Whether to use === or == when comparing
+     *
+     * @var bool
+     */
+    public $strict = false;
+
+    /**
+     * Template.
+     *
+     * @var string
+     */
+    protected $_template;
+
+    /**
+     * Template rows.
+     *
+     * @var string
+     */
+    protected $_template_rows;
+
+    /**
+     * List of visible test items.
+     *
+     * @var array
+     */
+    protected $_test_items_visible = [
+        'test_name',
+        'test_datatype',
+        'res_datatype',
+        'result',
+        'file',
+        'line',
+        'notes',
+    ];
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Constructor.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+        log_message('info', 'Unit Testing Class Initialized');
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Run the tests.
+     *
+     * Runs the supplied tests
+     *
+     * @param array $items
+     *
+     * @return void
+     */
+    public function set_test_items($items)
+    {
+        if (!empty($items) && is_array($items)) {
+            $this->_test_items_visible = $items;
+        }
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Run the tests.
+     *
+     * Runs the supplied tests
+     *
+     * @param string $test_name
+     * @param string $notes
+     *
+     * @return string
+     */
+    public function run($test, $expected = true, $test_name = 'undefined', $notes = '')
+    {
+        if (false === $this->active) {
+            return false;
+        }
+
+        if (in_array($expected, ['is_object', 'is_string', 'is_bool', 'is_true', 'is_false', 'is_int', 'is_numeric', 'is_float', 'is_double', 'is_array', 'is_null', 'is_resource'], true)) {
+            $result = $expected($test);
+            $extype = str_replace(['true', 'false'], 'bool', str_replace('is_', '', $expected));
+        } else {
+            $result = (true === $this->strict) ? ($test === $expected) : ($test == $expected);
+            $extype = gettype($expected);
+        }
+
+        $back = $this->_backtrace();
+
+        $report = [
+            'test_name' => $test_name,
+            'test_datatype' => gettype($test),
+            'res_datatype' => $extype,
+            'result' => (true === $result) ? 'passed' : 'failed',
+            'file' => $back['file'],
+            'line' => $back['line'],
+            'notes' => $notes,
+        ];
+
+        $this->results[] = $report;
+
+        return $this->report($this->result([$report]));
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Generate a report.
+     *
+     * Displays a table with the test data
+     *
+     * @param array $result
+     *
+     * @return string
+     */
+    public function report($result = [])
+    {
+        if (0 === count($result)) {
+            $result = $this->result();
+        }
+
+        $CI = &get_instance();
+        $CI->load->language('unit_test');
+
+        $this->_parse_template();
+
+        $r = '';
+        foreach ($result as $res) {
+            $table = '';
+
+            foreach ($res as $key => $val) {
+                if ($key === $CI->lang->line('ut_result')) {
+                    if ($val === $CI->lang->line('ut_passed')) {
+                        $val = '<span style="color: #0C0;">' . $val . '</span>';
+                    } elseif ($val === $CI->lang->line('ut_failed')) {
+                        $val = '<span style="color: #C00;">' . $val . '</span>';
+                    }
+                }
+
+                $table .= str_replace(['{item}', '{result}'], [$key, $val], $this->_template_rows);
+            }
+
+            $r .= str_replace('{rows}', $table, $this->_template);
+        }
+
+        return $r;
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Use strict comparison.
+     *
+     * Causes the evaluation to use === rather than ==
+     *
+     * @param bool $state
+     *
+     * @return void
+     */
+    public function use_strict($state = true)
+    {
+        $this->strict = (bool) $state;
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Make Unit testing active.
+     *
+     * Enables/disables unit testing
+     *
+     * @param	bool
+     *
+     * @return void
+     */
+    public function active($state = true)
+    {
+        $this->active = (bool) $state;
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Result Array.
+     *
+     * Returns the raw result data
+     *
+     * @param array $results
+     *
+     * @return array
+     */
+    public function result($results = [])
+    {
+        $CI = &get_instance();
+        $CI->load->language('unit_test');
+
+        if (0 === count($results)) {
+            $results = $this->results;
+        }
+
+        $retval = [];
+        foreach ($results as $result) {
+            $temp = [];
+            foreach ($result as $key => $val) {
+                if (!in_array($key, $this->_test_items_visible)) {
+                    continue;
+                } elseif (in_array($key, ['test_name', 'test_datatype', 'res_datatype', 'result'], true)) {
+                    if (false !== ($line = $CI->lang->line(strtolower('ut_' . $val), false))) {
+                        $val = $line;
+                    }
+                }
+
+                $temp[$CI->lang->line('ut_' . $key, false)] = $val;
+            }
+
+            $retval[] = $temp;
+        }
+
+        return $retval;
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Set the template.
+     *
+     * This lets us set the template to be used to display results
+     *
+     * @param	string
+     *
+     * @return void
+     */
+    public function set_template($template)
+    {
+        $this->_template = $template;
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Generate a backtrace.
+     *
+     * This lets us show file names and line numbers
+     *
+     * @return array
+     */
+    protected function _backtrace()
+    {
+        $back = debug_backtrace();
+
+        return [
+            'file' => (isset($back[1]['file']) ? $back[1]['file'] : ''),
+            'line' => (isset($back[1]['line']) ? $back[1]['line'] : ''),
+        ];
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Get Default Template.
+     *
+     * @return string
+     */
+    protected function _default_template()
+    {
+        $this->_template = "\n" . '<table style="width:100%; font-size:small; margin:10px 0; border-collapse:collapse; border:1px solid #CCC;">{rows}' . "\n</table>";
+
+        $this->_template_rows = "\n\t<tr>\n\t\t" . '<th style="text-align: left; border-bottom:1px solid #CCC;">{item}</th>'
+            . "\n\t\t" . '<td style="border-bottom:1px solid #CCC;">{result}</td>' . "\n\t</tr>";
+    }
+
+    // --------------------------------------------------------------------
+
+    /**
+     * Parse Template.
+     *
+     * Harvests the data within the template {pseudo-variables}
+     *
+     * @return void
+     */
+    protected function _parse_template()
+    {
+        if (null !== $this->_template_rows) {
+            return;
+        }
+
+        if (null === $this->_template or !preg_match('/\{rows\}(.*?)\{\/rows\}/si', $this->_template, $match)) {
+            $this->_default_template();
+
+            return;
+        }
+
+        $this->_template_rows = $match[1];
+        $this->_template = str_replace($match[0], '{rows}', $this->_template);
+    }
+}
+
+/**
+ * Helper function to test boolean TRUE.
+ *
+ * @return bool
+ */
+function is_true($test)
+{
+    return true === $test;
+}
+
+/**
+ * Helper function to test boolean FALSE.
+ *
+ * @return bool
+ */
+function is_false($test)
+{
+    return false === $test;
+}

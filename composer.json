@@ -52,7 +52,10 @@
     "autoload": {
         "psr-4": {
             "App\\": "src/"
-        }
+        },
+        "classmap": [
+            "codeigniter/"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
